@@ -1,0 +1,198 @@
+#!/bin/bash
+# =========================
+# CONFIG
+# =========================
+SINGPERA_USER="singpera"
+SINGPERA_HOME="/home/$SINGPERA_USER"
+SINGPERA_SSH_DIR="$SINGPERA_HOME/.ssh"
+SSH_KEY="$SINGPERA_SSH_DIR/singpera_key"
+DEFAULT_STORAGE_FILE="$SINGPERA_HOME/.singpera_storage"
+
+# =========================
+# HELPER FUNCTIONS
+# =========================
+install_if_missing() {
+    for pkg in "$@"; do
+        if ! command -v $pkg &> /dev/null; then
+            echo "[!] $pkg not found. Installing..." >&2
+            sudo apt update && sudo apt install -y $pkg
+        else
+            echo "[✓] $pkg already installed" >&2
+        fi
+    done
+}
+
+ensure_singpera_user() {
+    if id "$SINGPERA_USER" &>/dev/null; then
+        echo "[✓] User '$SINGPERA_USER' already exists" >&2
+    else
+        echo "[*] Creating system user '$SINGPERA_USER'..." >&2
+        sudo useradd \
+            --system \
+            --create-home \
+            --home-dir "$SINGPERA_HOME" \
+            --shell /bin/bash \
+            --comment "Singpera Backup Service" \
+            "$SINGPERA_USER"
+        echo "[✓] User '$SINGPERA_USER' created" >&2
+    fi
+
+    if [ ! -d "$SINGPERA_SSH_DIR" ]; then
+        sudo mkdir -p "$SINGPERA_SSH_DIR"
+    fi
+    sudo chmod 700 "$SINGPERA_SSH_DIR"
+    sudo chown -R "$SINGPERA_USER:$SINGPERA_USER" "$SINGPERA_SSH_DIR"
+}
+
+setup_ssh_key() {
+    if sudo test -f "$SSH_KEY"; then
+        echo "[✓] SSH key already exists at $SSH_KEY" >&2
+    else
+        echo "[*] Generating SSH key for user '$SINGPERA_USER'..." >&2
+        sudo -u "$SINGPERA_USER" ssh-keygen -t rsa -b 2048 -f "$SSH_KEY" -N ""
+        echo "[✓] SSH key generated at $SSH_KEY" >&2
+    fi
+}
+
+set_default_storage() {
+    read -p "Enter storage server (user@host): " STORAGE
+    echo "$STORAGE" | sudo tee "$DEFAULT_STORAGE_FILE" > /dev/null
+    sudo chown "$SINGPERA_USER:$SINGPERA_USER" "$DEFAULT_STORAGE_FILE"
+    echo "[✓] Default storage saved" >&2
+    echo "$STORAGE"
+}
+
+get_storage() {
+    if sudo test -f "$DEFAULT_STORAGE_FILE"; then
+        STORAGE=$(sudo cat "$DEFAULT_STORAGE_FILE")
+        read -p "Use default storage ($STORAGE)? (y/n): " choice >&2
+        if [[ "$choice" == "y" ]]; then
+            echo "$STORAGE"
+            return
+        fi
+    fi
+    read -p "Enter storage server (user@host): " STORAGE
+    echo "$STORAGE"
+}
+
+copy_ssh_key() {
+    local STORAGE=$1
+    echo "[*] Copying SSH key to $STORAGE" >&2
+    sudo -u "$SINGPERA_USER" ssh-copy-id -i "$SSH_KEY.pub" "$STORAGE"
+}
+
+setup_remote_singpera_dir() {
+    local STORAGE=$1
+    read -p "Enter path on storage server for Singpera backups [default: ~/singpera]: " REMOTE_DIR
+    REMOTE_DIR="${REMOTE_DIR:-~/singpera}"
+
+    echo "[*] Setting up Singpera directory on $STORAGE at $REMOTE_DIR ..." >&2
+    sudo -u "$SINGPERA_USER" ssh -i "$SSH_KEY" "$STORAGE" "
+        # Install rsync kalau belum ada
+        if ! command -v rsync &> /dev/null; then
+            echo '[*] Installing rsync on storage server...'
+            sudo apt update && sudo apt install -y rsync
+        else
+            echo '[✓] rsync already installed on storage server'
+        fi
+
+        mkdir -p $REMOTE_DIR && \
+        chmod 750 $REMOTE_DIR && \
+        echo '[✓] Singpera dir ready: $REMOTE_DIR'
+    "
+
+    if [ $? -eq 0 ]; then
+        echo "$REMOTE_DIR" | sudo tee "$SINGPERA_HOME/.singpera_remote_dir" > /dev/null
+        sudo chown "$SINGPERA_USER:$SINGPERA_USER" "$SINGPERA_HOME/.singpera_remote_dir"
+        echo "[✓] Remote Singpera directory configured: $STORAGE:$REMOTE_DIR" >&2
+    else
+        echo "[!] Failed to setup remote directory. Check SSH connection." >&2
+    fi
+}
+
+get_remote_dir() {
+    if sudo test -f "$SINGPERA_HOME/.singpera_remote_dir"; then
+        DEFAULT_REMOTE_DIR=$(sudo cat "$SINGPERA_HOME/.singpera_remote_dir")
+        read -p "Enter destination path on storage server [default: $DEFAULT_REMOTE_DIR]: " DEST
+        echo "${DEST:-$DEFAULT_REMOTE_DIR}"
+    else
+        read -p "Enter destination path on storage server: " DEST
+        echo "$DEST"
+    fi
+}
+
+# =========================
+# FEATURES
+# =========================
+configure_singpera() {
+    echo "== Configure Singpera ==" >&2
+
+    if [[ "$EUID" -ne 0 ]]; then
+        echo "[!] Configure harus dijalankan sebagai root (gunakan sudo)" >&2
+        return 1
+    fi
+
+    install_if_missing cron rsync ssh sshpass
+    ensure_singpera_user
+    setup_ssh_key
+
+    STORAGE=$(set_default_storage)
+    copy_ssh_key "$STORAGE"
+    setup_remote_singpera_dir "$STORAGE"
+
+    echo "" >&2
+    echo "[✓] Configuration done" >&2
+    echo "[i] SSH Key public:" >&2
+    sudo cat "$SSH_KEY.pub"
+}
+
+create_schedule_backup() {
+    echo "== Create Scheduled Backup =="
+    read -p "Enter source path to backup: " SRC
+    STORAGE=$(get_storage)
+    DEST=$(get_remote_dir)
+
+    read -p "Enter cron schedule (e.g. 0 2 * * *): " CRON_TIME
+
+    CMD="rsync -avz -e 'ssh -i $SSH_KEY' --rsync-path='rsync' $SRC $STORAGE:$DEST"
+    (sudo crontab -u "$SINGPERA_USER" -l 2>/dev/null; echo "$CRON_TIME $CMD") \
+        | sudo crontab -u "$SINGPERA_USER" -
+    echo "[✓] Scheduled backup created (crontab user: $SINGPERA_USER)"
+}
+
+one_shot_backup() {
+    echo "== One Shot Backup =="
+    read -p "Enter source path to backup: " SRC
+    STORAGE=$(get_storage)
+    DEST=$(get_remote_dir)
+
+    echo "[*] Running backup..."
+    sudo -u "$SINGPERA_USER" rsync -avz \
+        -e "ssh -i $SSH_KEY" \
+        --rsync-path="rsync" \
+        "$SRC" "$STORAGE:$DEST"
+    echo "[✓] Backup completed"
+}
+
+# =========================
+# MAIN MENU
+# =========================
+while true; do
+    echo ""
+    echo "=============================="
+    echo " Welcome to SINGPERA"
+    echo "=============================="
+    echo "1. Configure Singpera"
+    echo "2. Create Scheduled Backup"
+    echo "3. One Shot Backup"
+    echo "4. Exit"
+    echo "=============================="
+    read -p "Choose option: " choice
+    case $choice in
+        1) configure_singpera ;;
+        2) create_schedule_backup ;;
+        3) one_shot_backup ;;
+        4) exit 0 ;;
+        *) echo "Invalid option" ;;
+    esac
+done
