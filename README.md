@@ -64,7 +64,7 @@ choose option 2
 you will be prompted the details for:  
     1. source path of the file you wanted to backup  
     2. the storage server  
-    3. the directory where backup files should be stored
+    3. the directory where backup files should be stored  
     4. the cron time expression  
 
 example can be seen below:  
