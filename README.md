@@ -20,7 +20,7 @@ project mata kuliah sistem operasi kelompok 1: SINGPERA
 ```wget https://github.com/mignere/SINGPERA/archive/refs/heads/main.zip -O singpera.zip```
 ### 2. Unzip the source code  
 ```unzip singpera.zip```
-### 3. Copy binary to local binary directory  
+### 3. Move singpera binary to system local binary directory  
 ```sudo mv singpera-MAIN/singpera /usr/local/bin/singpera```
 ### 4. test if the binary can be called globally  
 ```singpera -h```
