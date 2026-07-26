@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>SINGPERA — Console</title>
+  <link rel="stylesheet" href="/css/style.css" />
+</head>
+<body class="page-app">
+  <header class="topbar">
+    <div>
+      <p class="brand-name">SINGPERA</p>
+      <p class="brand-tag">Web management console</p>
+    </div>
+    <div class="topbar-actions">
+      <span id="whoami" class="whoami"></span>
+      <button type="button" id="logout-btn" class="btn-secondary">Logout</button>
+    </div>
+  </header>
+
+  <main class="layout">
+    <section class="panel" id="status-panel">
+      <h2>Configuration status</h2>
+      <p class="lede">Remote storage is configured with <code>sudo singpera</code> (CLI option 1). This panel only reports readiness.</p>
+      <div id="status-body" class="status-grid">Loading…</div>
+    </section>
+
+    <section class="panel">
+      <h2>One-shot backup</h2>
+      <p class="lede">Runs <code>singpera &lt;SRC&gt; &lt;DEST&gt;</code> once.</p>
+      <form id="oneshot-form" class="stack-form">
+        <label>
+          Source path (absolute)
+          <input type="text" id="oneshot-src" name="src" placeholder="/home/user/data" required />
+        </label>
+        <label>
+          Destination (<code>user@host:/path</code>)
+          <input type="text" id="oneshot-dest" name="dest" placeholder="user@192.168.1.50:/backup" required />
+        </label>
+        <button type="submit">Run backup</button>
+      </form>
+      <pre id="oneshot-out" class="output" hidden></pre>
+    </section>
+
+    <section class="panel">
+      <h2>Schedule backup</h2>
+      <p class="lede">Runs <code>singpera -c "CRON" &lt;SRC&gt; &lt;DEST&gt;</code> and installs a root crontab entry.</p>
+      <form id="schedule-form" class="stack-form">
+        <label>
+          Cron expression
+          <input type="text" id="schedule-cron" name="cron" placeholder="0 2 * * *" required />
+        </label>
+        <label>
+          Source path (absolute)
+          <input type="text" id="schedule-src" name="src" placeholder="/home/user/data" required />
+        </label>
+        <label>
+          Destination (<code>user@host:/path</code>)
+          <input type="text" id="schedule-dest" name="dest" placeholder="user@192.168.1.50:/backup" required />
+        </label>
+        <button type="submit">Create schedule</button>
+      </form>
+      <pre id="schedule-out" class="output" hidden></pre>
+    </section>
+
+    <section class="panel">
+      <div class="panel-head">
+        <h2>Scheduled jobs</h2>
+        <button type="button" id="refresh-jobs" class="btn-secondary">Refresh</button>
+      </div>
+      <p class="lede">Root crontab lines tagged for SINGPERA / rsync.</p>
+      <div id="jobs-body">Loading…</div>
+    </section>
+  </main>
+
+  <script src="/js/api.js"></script>
+  <script src="/js/app.js"></script>
+</body>
+</html>

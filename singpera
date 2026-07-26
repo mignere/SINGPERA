@@ -195,7 +195,7 @@ scheduledBackup(){
 	read -p "Enter cron schedule (e.g. 0 2 * * *): " CRON_TIME
 
 	CMD="/usr/bin/rsync -avz -e 'ssh -i $SINGPERA_SSH_KEY' --rsync-path='rsync' $SRC $STORAGE:$DEST"
-	(sudo crontab -u root -l 2>/dev/null; echo "$CRON_TIME $CMD") \
+	(sudo crontab -u root -l 2>/dev/null; echo "# singpera"; echo "$CRON_TIME $CMD") \
 	| sudo crontab -u root -
 
 	log "Scheduled backup created."
@@ -284,7 +284,7 @@ else
 		log "Cron Time   : $CRON_TIME"
 
 		CMD="/usr/bin/rsync -avz -e 'ssh -i $SINGPERA_SSH_KEY' --rsync-path='rsync' $SRC $STORAGE:$DEST"
-		(sudo crontab -u root -l 2>/dev/null; echo "$CRON_TIME $CMD") \
+		(sudo crontab -u root -l 2>/dev/null; echo "# singpera"; echo "$CRON_TIME $CMD") \
 		| sudo crontab -u root -
 
 		log "Scheduled backup successfully created via CLI."

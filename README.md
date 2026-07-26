@@ -69,3 +69,49 @@ you will be prompted the details for:
 
 example can be seen below:  
 ![scheduled-backup-interactive](./src/scheduled-backup-interactive.png)
+
+## Web management console
+
+The `web/` directory is a Node.js (Express) console that wraps the same `singpera` CLI — similar to how phpMyAdmin sits in front of MySQL. Login uses **Linux PAM** (any local system account). There is no separate user database.
+
+### Requirements
+
+- Node.js 18+
+- Python 3 (PAM helper uses `libpam.so` via ctypes)
+- `singpera` installed or available at the repo root (`SINGPERA_BIN` can override)
+- Enough privilege to run backups / read root crontab (typically run the console with `sudo`, or grant scoped sudoers rules)
+
+### Install and run
+
+```bash
+cd web
+npm install
+SESSION_SECRET="$(openssl rand -hex 24)" npm start
+```
+
+Open `http://127.0.0.1:3080` (bound to localhost by default).
+
+Optional env vars:
+
+| Variable | Default | Meaning |
+|----------|---------|---------|
+| `HOST` | `127.0.0.1` | Listen address |
+| `PORT` | `3080` | Listen port |
+| `SESSION_SECRET` | dev default | Cookie signing secret — set this |
+| `SINGPERA_BIN` | `/usr/local/bin/singpera` or `../singpera` | Path to CLI |
+| `COOKIE_SECURE` | unset | Set to `1` only behind HTTPS |
+
+### CLI ↔ web mapping
+
+| Web action | CLI equivalent |
+|------------|----------------|
+| Sign in | PAM check (system username/password) |
+| One-shot backup | `singpera <SRC> <DEST>` |
+| Schedule backup | `singpera -c "CRON" <SRC> <DEST>` |
+| List jobs | `crontab -u root -l` (filtered for singpera) |
+| Config status | Reads `/home/singpera/.singpera_*` and SSH key files |
+| Full configure (SSH, remote dir) | Still CLI only: `sudo singpera` → option 1 |
+
+### Privilege note
+
+Treat this console like phpMyAdmin with powerful DB credentials: whoever can log in can trigger backups through the service account/privileges of the Node process. Keep it on localhost or a trusted LAN; do not expose it to the public internet without additional hardening.

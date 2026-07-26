@@ -1,0 +1,21 @@
+{
+  "name": "singpera-web",
+  "version": "1.0.0",
+  "description": "SINGPERA web management console — PAM auth + Express API over the singpera CLI",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js"
+  },
+  "keywords": ["singpera", "backup", "pam"],
+  "license": "ISC",
+  "type": "commonjs",
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "express": "^4.21.2",
+    "express-rate-limit": "^7.5.0",
+    "express-session": "^1.18.1"
+  }
+}
